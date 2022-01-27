@@ -207,4 +207,3 @@ ses$data <- as.Date(with(ses, paste(data_y, data_m, data_d,sep="/")), "%Y/%m/%d"
   write_xlsx(nonlifef_cy, "nonlife_cy.xlsx")
   write_xlsx(nonlifef_py, "nonlife_py.xlsx")
 }
-    
