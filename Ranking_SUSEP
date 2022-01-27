@@ -1,0 +1,210 @@
+##############################################################################
+"
+RANKING - BRAZILIAN INSURANCE MARKET
+Data Source: Superintendência de Seguros Privados (SUSEP)
+
+links: 
+http://www2.susep.gov.br/redarq.asp?arq=BaseCompleta%2ezip
+https://www2.susep.gov.br/menuestatistica/SES/principal.aspx
+
+"
+##############################################################################
+
+#1. Packages
+{{pacotes <- c("tidyquant","stats","stringr", "dplyr","maditr","writexl")}
+  
+  if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+    instalador <- pacotes[!pacotes %in% installed.packages()]
+    for(i in 1:length(instalador)) {
+      install.packages(instalador, dependencies = T)
+      break()}
+    sapply(pacotes, require, character = T) 
+  } else {
+    sapply(pacotes, require, character = T) 
+  }
+}
+
+#2. Importing data 
+{
+ses<- fread(input = "ses_seguros.csv",encoding="Latin-1")
+}
+
+#3. Adjusting dates columns 
+{
+ses$data_d <- as.numeric("01")
+ses$data_m <- as.numeric(str_sub(ses$damesano, start = 5,end = ))
+ses$data_y <- as.numeric(str_sub(ses$damesano, start = ,end =4 ))
+ses$data <- as.Date(with(ses, paste(data_y, data_m, data_d,sep="/")), "%Y/%m/%d")
+}
+
+#4. Filtering current year, prior year and actual month (last month available)
+{
+  r_cy <- select(ses, 
+                    coenti,coramo,data_y,data_m,premio_ganho,sinistro_ocorrido)
+
+  cy <- max(r_cy$data_y)
+  r_cy <- filter(r_cy,data_y == cy ) 
+
+  month <- max(r_cy$data_m)
+
+  py <- cy-1
+  r_py <- filter(select(ses, 
+                         coenti,coramo,data_y,data_m,premio_ganho,sinistro_ocorrido),
+                  data_y == py )
+  r_py <- filter(r_py,data_m <= month)
+}
+
+#5. Filtering the line of business (9 and 13 = LIFE; others = NON-LIFE)
+{
+  r_cy$lob <- as.numeric(str_sub(r_cy$coramo , start = ,end =1 ))
+  r_cy$lob2 <- as.numeric(str_sub(r_cy$coramo, start = ,end =2 ))
+  r_py$lob <- as.numeric(str_sub(r_py$coramo , start = ,end =1 ))
+  r_py$lob2 <- as.numeric(str_sub(r_py$coramo, start = ,end =2 ))
+  
+  life_cy <- r_cy[substr(r_cy$coramo,1,1) == '9' | 
+                    substr(r_cy$coramo,1,2) == '13' ] 
+ 
+  life_py <- r_py[substr(r_py$coramo,1,1) == '9' | 
+                    substr(r_py$coramo,1,2) == '13' ]
+  summary(life_cy)
+  
+  
+  nonlife_cy <- r_cy[lob != "9" & lob2 != "13"]
+  nonlife_py <- r_py[lob != "9" & lob2 != "13"]
+  }
+
+#6. Sum by company
+{
+  #6.1 Total Market
+  {
+  rf_cy <- aggregate(as.numeric(sub(',','.',r_cy$premio_ganho)),
+                  by=list(r_cy$coenti),
+                  FUN=sum) 
+  rf_cy$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',r_cy$sinistro_ocorrido)),
+                    by=list(r_cy$coenti),
+                    FUN=sum) 
+  rf_cy$sinistros <- rf_cy$sinistro_ocorrido$x
+  rf_cy <- select(rf_cy,Group.1, x, sinistros)
+  colnames(rf_cy) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  rf_cy <- rf_cy[order(rf_cy[,"premio_ganho"], decreasing = TRUE),]
+
+  
+  
+  rf_py <- aggregate(as.numeric(sub(',','.',r_py$premio_ganho)),
+                     by=list(r_py$coenti),
+                     FUN=sum) 
+  rf_py$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',r_py$sinistro_ocorrido)),
+                                       by=list(r_py$coenti),
+                                       FUN=sum) 
+  rf_py$sinistros <- rf_py$sinistro_ocorrido$x
+  rf_py <- select(rf_py,Group.1, x, sinistros)
+  colnames(rf_py) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  rf_py <- rf_py[order(rf_py[,"premio_ganho"], decreasing = TRUE),]
+  }
+
+  #6.2 Life
+  {  
+  lifef_cy <- aggregate(as.numeric(sub(',','.',life_cy$premio_ganho)),
+                      by=list(life_cy$coenti),
+                      FUN=sum) 
+  lifef_cy$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',life_cy$sinistro_ocorrido)),
+                                       by=list(life_cy$coenti),
+                                       FUN=sum) 
+  lifef_cy$sinistros <- lifef_cy$sinistro_ocorrido$x
+  lifef_cy <- select(lifef_cy,Group.1, x, sinistros)
+  colnames(lifef_cy) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  lifef_cy <- lifef_cy[order(lifef_cy[,"premio_ganho"], decreasing = TRUE),]
+  
+  
+  
+  lifef_py <- aggregate(as.numeric(sub(',','.',life_py$premio_ganho)),
+                     by=list(life_py$coenti),
+                     FUN=sum) 
+  lifef_py$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',life_py$sinistro_ocorrido)),
+                                       by=list(life_py$coenti),
+                                       FUN=sum) 
+  lifef_py$sinistros <- lifef_py$sinistro_ocorrido$x
+  lifef_py <- select(lifef_py,Group.1, x, sinistros)
+  colnames(lifef_py) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  lifef_py <- lifef_py[order(lifef_py[,"premio_ganho"], decreasing = TRUE),]
+  }
+  
+  #6.3 Non-Life
+  {  
+  nonlifef_cy <- aggregate(as.numeric(sub(',','.',nonlife_cy$premio_ganho)),
+                        by=list(nonlife_cy$coenti),
+                        FUN=sum) 
+  nonlifef_cy$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',nonlife_cy$sinistro_ocorrido)),
+                                          by=list(nonlife_cy$coenti),
+                                          FUN=sum) 
+  nonlifef_cy$sinistros <- nonlifef_cy$sinistro_ocorrido$x
+  nonlifef_cy <- select(nonlifef_cy,Group.1, x, sinistros)
+  colnames(nonlifef_cy) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  nonlifef_cy <- nonlifef_cy[order(nonlifef_cy[,"premio_ganho"], decreasing = TRUE),]
+  
+  
+  
+  nonlifef_py <- aggregate(as.numeric(sub(',','.',nonlife_py$premio_ganho)),
+                        by=list(nonlife_py$coenti),
+                        FUN=sum) 
+  nonlifef_py$sinistro_ocorrido <- aggregate(as.numeric(sub(',','.',nonlife_py$sinistro_ocorrido)),
+                                          by=list(nonlife_py$coenti),
+                                          FUN=sum) 
+  nonlifef_py$sinistros <- nonlifef_py$sinistro_ocorrido$x
+  nonlifef_py <- select(nonlifef_py,Group.1, x, sinistros)
+  colnames(nonlifef_py) <- c('coenti','premio_ganho','sinistro_ocorrido')
+  nonlifef_py <- nonlifef_py[order(nonlifef_py[,"premio_ganho"], decreasing = TRUE),]
+  }
+}
+
+#7. Ranking
+{ 
+  #7.1 Total Market
+  {
+  rf_cy$r <- rank(rf_cy$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(r_cy$coenti)
+  rf_cy$r <- c(1:x)
+  
+  rf_py$r <- rank(rf_py$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(rf_py$coenti)
+  rf_py$r <- c(1:x)
+  }
+  
+  #7.2 Life
+  {
+  lifef_cy$r <- rank(lifef_cy$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(life_cy$coenti)
+  lifef_cy$r <- c(1:x)
+  
+  lifef_py$r <- rank(lifef_py$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(lifef_py$coenti)
+  lifef_py$r <- c(1:x)
+  }
+  
+  #7.3 Non-Life
+  {
+  nonlifef_cy$r <- rank(nonlifef_cy$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(nonlife_cy$coenti)
+  nonlifef_cy$r <- c(1:x)
+  
+  nonlifef_py$r <- rank(nonlifef_py$premio_ganho,na.last = "NA") 
+  x <- COUNT_UNIQUE(nonlife_py$coenti)
+  nonlifef_py$r <- c(1:x)
+  }
+}
+
+#8. Export in spreadsheet
+{
+  #Total Market
+  write_xlsx(rf_cy, "ranking_cy.xlsx")
+  write_xlsx(rf_py, "ranking_py.xlsx")
+  
+  #Life
+  write_xlsx(lifef_cy, "life_cy.xlsx")
+  write_xlsx(lifef_py, "life_py.xlsx")
+  
+  #Non-Life
+  write_xlsx(nonlifef_cy, "nonlife_cy.xlsx")
+  write_xlsx(nonlifef_py, "nonlife_py.xlsx")
+}
+    
